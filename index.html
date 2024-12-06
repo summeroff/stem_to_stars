@@ -55,12 +55,77 @@ function centerY() { return canvas.height / 2; }
 //========================
 // Utilities
 //========================
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function generateMathExpression() {
-  const ops = ['+', '-', '*'];
-  const a = Math.floor(Math.random()*20)+1; 
-  const b = Math.floor(Math.random()*20)+1;
-  const op = ops[Math.floor(Math.random()*ops.length)];
-  return `${a}${op}${b}`;
+  // Simple sets of templates
+  const singleLineNumeric = [
+    // simple equalities
+    () => {
+      const a = randomInt(1,20), b = randomInt(1,20);
+      return `${a}+${b}=${a+b}`;
+    },
+    () => {
+      const a = randomInt(1,20), b = randomInt(1,20);
+      return `${a}-${b}=${a-b}`;
+    },
+    () => {
+      const a = randomInt(1,10), b = randomInt(1,10);
+      return `${a}*${b}=${a*b}`;
+    },
+    () => {
+      const a = randomInt(2,20), b = randomInt(1,10);
+      return `${a}/${b}=${(a/b).toFixed(1)}`;
+    },
+    // inequalities
+    () => {
+      const a = randomInt(1,10), b = randomInt(1,10), c = randomInt(1,10), d = randomInt(1,10);
+      return `${a}+${b}<${c}*${d}`;
+    }
+  ];
+
+  const singleLineVars = [
+    () => "x=y^2",
+    () => "e=mc^2",
+    () => {
+      const a = randomInt(1,5), b = randomInt(1,5);
+      return `x=${a}a+${b}`;
+    },
+    () => "a^2+b^2=c^2"
+  ];
+
+  // Two-line expressions
+  const twoLine = [
+    () => {
+      const a = randomInt(1,10), b = randomInt(1,10);
+      return `x=2a+${b}<br>x=a^3+2`;
+    },
+    () => {
+      const a = randomInt(1,10), b = randomInt(1,10), c = randomInt(1,10);
+      return `f(x)=x^2+${a}x+${b}<br>g(x)=${c}x+1`;
+    },
+    () => {
+      const a = randomInt(1,10), b = randomInt(1,10);
+      return `${a}+${b}=${a+b}<br>${a}*${b}=${a*b}`;
+    }
+  ];
+
+  // Combine categories
+  const categories = [
+    ...singleLineNumeric,
+    ...singleLineVars,
+    ...twoLine
+  ];
+
+  // Randomly pick one pattern and generate expression
+  const expressionFunc = pickRandom(categories);
+  return expressionFunc();
 }
 
 function randomRange(min, max) {
@@ -94,19 +159,31 @@ class SpaceObject {
   }
 
   reset() {
-    // Set random initial position far away within a large circle
     const point = randomCirclePoint(CONFIG.spawnRadius);
     this.x = point.x;
     this.y = point.y;
     this.z = CONFIG.startZ;
-    this.speed = randomRange(CONFIG.minSpeed, CONFIG.maxSpeed);
+    // We'll store a base speed for reference
+    this.baseSpeed = randomRange(CONFIG.minSpeed, CONFIG.maxSpeed);
+  }
+
+  // Compute speed based on current z:
+  // When far away (z ~ startZ), speed ~ baseSpeed
+  // When close (z ~ resetZ), speed -> smaller fraction of baseSpeed
+  getCurrentSpeed() {
+    const distanceRange = Math.abs(CONFIG.startZ - CONFIG.resetZ);
+    const currentDistance = Math.abs(this.z - CONFIG.resetZ);
+    const fraction = currentDistance / distanceRange; // 1 at startZ, 0 near resetZ
+    // Let's say speed can't drop below 20% of baseSpeed for readability
+    const minFraction = 0.2;
+    const adjustedFraction = fraction * (1 - minFraction) + minFraction; 
+    return this.baseSpeed * adjustedFraction;
   }
 
   update() {
-    // Move towards camera: increasing z
-    this.z += this.speed;
+    const speed = this.getCurrentSpeed();
+    this.z += speed;
 
-    // If object passes too close, reset it behind again
     if (this.z > CONFIG.resetZ) {
       this.reset();
     }
@@ -120,11 +197,13 @@ class Word extends SpaceObject {
   constructor() {
     super();
     this.text = generateMathExpression();
+    console.log("Generated word:", this.text);
   }
 
   reset() {
     super.reset();
     this.text = generateMathExpression();
+    console.log("Generated word:", this.text);
   }
 
   draw(ctx) {
@@ -142,10 +221,6 @@ class Word extends SpaceObject {
 // Star class (no scaling in size, just position)
 //========================
 class Star extends SpaceObject {
-  constructor() {
-    super();
-  }
-
   draw(ctx) {
     const {screenX, screenY} = project3D(this.x, this.y, this.z, CONFIG.focalLength);
     ctx.fillStyle = "white";
