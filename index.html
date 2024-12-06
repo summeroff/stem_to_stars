@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+  body, html {
+    margin: 0; 
+    padding: 0; 
+    background: black; 
+    overflow: hidden;
+  }
+  canvas {
+    display:block;
+  }
+</style>
+<title>Flying Math</title>
+</head>
+<body>
+<canvas id="myCanvas"></canvas>
+<script>
+const canvas = document.getElementById('myCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Parameters
+const focalLength = 200;
+const speed = 2;
+const maxDistance = -1000; 
+const startZ = -100;
+const NUM_WORDS = 10;
+
+const centerX = () => canvas.width / 2;
+const centerY = () => canvas.height / 2;
+
+// Generate a random math expression like "3+5", "10-2", "6*7"
+function generateMathExpression() {
+  const ops = ['+', '-', '*'];
+  const a = Math.floor(Math.random()*20)+1; // 1 to 20
+  const b = Math.floor(Math.random()*20)+1; // 1 to 20
+  const op = ops[Math.floor(Math.random()*ops.length)];
+  return `${a}${op}${b}`;
+}
+
+// Initialize words as math expressions
+function createWordObject() {
+  return {
+    text: generateMathExpression(),
+    x: centerX() + (Math.random() - 0.5) * 300,
+    y: centerY() + (Math.random() - 0.5) * 200,
+    z: startZ,
+    delay: Math.floor(Math.random()*60),
+    active: false
+  };
+}
+
+const words = [];
+for (let i = 0; i < NUM_WORDS; i++) {
+  words.push(createWordObject());
+}
+
+function resetWord(word) {
+  word.text = generateMathExpression();
+  word.x = centerX() + (Math.random() - 0.5) * 300;
+  word.y = centerY() + (Math.random() - 0.5) * 200;
+  word.z = startZ;
+  word.delay = Math.floor(Math.random()*60);
+  word.active = false; 
+}
+
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (let word of words) {
+    // Handle delay before activation
+    if (!word.active) {
+      word.delay--;
+      if (word.delay <= 0) {
+        word.active = true;
+      } else {
+        continue;
+      }
+    }
+
+    const scale = focalLength / Math.abs(word.z);
+    const fontSize = 40 * scale;
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.fillText(word.text, word.x, word.y);
+
+    // Move word away
+    word.z -= speed;
+    word.x += (Math.random()-0.5)*0.3; 
+    word.y += (Math.random()-0.5)*0.3; 
+
+    if (word.z < maxDistance) {
+      resetWord(word);
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
