@@ -64,69 +64,105 @@ function pickRandom(arr) {
 }
 
 function generateMathExpression() {
-  // Simple sets of templates
+  // Single-line numeric expressions (each ≤ 10 chars)
+  // Examples of length checks:
+  // "1+2=3" -> 5 chars
+  // "9-4=5" -> 5 chars
+  // "2*3=6" -> 5 chars
+  // "8/2=4" -> 5 chars
+  // "3<2+2" -> 5 chars
   const singleLineNumeric = [
-    // simple equalities
     () => {
-      const a = randomInt(1,20), b = randomInt(1,20);
+      const a = randomInt(1,9), b = randomInt(1,9);
       return `${a}+${b}=${a+b}`;
     },
     () => {
-      const a = randomInt(1,20), b = randomInt(1,20);
+      const a = randomInt(1,9), b = randomInt(1,9);
       return `${a}-${b}=${a-b}`;
     },
     () => {
-      const a = randomInt(1,10), b = randomInt(1,10);
+      const a = randomInt(1,9), b = randomInt(1,9);
       return `${a}*${b}=${a*b}`;
     },
     () => {
-      const a = randomInt(2,20), b = randomInt(1,10);
-      return `${a}/${b}=${(a/b).toFixed(1)}`;
+      const a = randomInt(2,9), b = randomInt(1,9);
+      return `${a}/${b}=${Math.floor(a/b)}`;
     },
-    // inequalities
     () => {
-      const a = randomInt(1,10), b = randomInt(1,10), c = randomInt(1,10), d = randomInt(1,10);
-      return `${a}+${b}<${c}*${d}`;
+      const a = randomInt(1,9), b = randomInt(1,9), c = randomInt(1,9);
+      return `${a}+${b}<${c}+${b}`;
     }
   ];
 
+  // Single-line variables and constants (≤10 chars)
+  // Check lengths:
+  // "x=y^2" -> 5 chars
+  // "e=mc^2" -> 7 chars
+  // "x=2a+3" -> 7 chars if a ≤9
+  // "x^2=9" -> 6 chars
   const singleLineVars = [
     () => "x=y^2",
     () => "e=mc^2",
     () => {
-      const a = randomInt(1,5), b = randomInt(1,5);
+      const a = randomInt(1,9);
+      const b = randomInt(1,9);
       return `x=${a}a+${b}`;
     },
-    () => "a^2+b^2=c^2"
+    () => {
+      const val = Math.pow(randomInt(2,4),2); // something small like 4,9,16
+      return `x^2=${val}`;
+    }
   ];
 
-  // Two-line expressions
+  // Two-line expressions (≤10 chars each line)
+  // Check length:
+  // "x=2a+3" -> 7 chars, "x=a^2+2" -> 7 chars
+  // "f(x)=x^2" -> 8 chars, "g(x)=3x" -> 7 chars
+  // "2+3=5" -> 5 chars, "3*3=9" -> 5 chars
   const twoLine = [
     () => {
-      const a = randomInt(1,10), b = randomInt(1,10);
-      return `x=2a+${b}<br>x=a^3+2`;
+      const a = randomInt(1,9), b = randomInt(1,9);
+      return `x=${a}a+${b}<br>x=a^2+2`;
     },
     () => {
-      const a = randomInt(1,10), b = randomInt(1,10), c = randomInt(1,10);
-      return `f(x)=x^2+${a}x+${b}<br>g(x)=${c}x+1`;
+      const a = randomInt(1,9), b = randomInt(1,9);
+      return `f(x)=x^2<br>g(x)=${a}x+${b}`;
     },
     () => {
-      const a = randomInt(1,10), b = randomInt(1,10);
+      const a = randomInt(1,9), b = randomInt(1,9);
       return `${a}+${b}=${a+b}<br>${a}*${b}=${a*b}`;
     }
   ];
 
-  // Combine categories
+  // Three-line expressions (each line ≤10 chars)
+  // Simple enough so no line surpasses 10 chars:
+  // "x=1", "y=2", "z=3" each are short.
+  const threeLine = [
+    () => {
+      const a = randomInt(1,9), b = randomInt(1,9), c = randomInt(1,9);
+      return `x=${a}<br>y=${b}<br>z=${c}`;
+    },
+    () => {
+      const a = randomInt(1,9);
+      return `x=a^2<br>x=${a}a<br>x=9`;
+    },
+    () => {
+      const a = randomInt(1,9), b = randomInt(1,9);
+      return `2+2=4<br>${a}=${a}<br>${b}*1=${b}`;
+    }
+  ];
+
   const categories = [
     ...singleLineNumeric,
     ...singleLineVars,
-    ...twoLine
+    ...twoLine,
+    ...threeLine
   ];
 
-  // Randomly pick one pattern and generate expression
   const expressionFunc = pickRandom(categories);
   return expressionFunc();
 }
+
 
 function randomRange(min, max) {
   return Math.random() * (max - min) + min;
@@ -213,9 +249,26 @@ class Word extends SpaceObject {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "white";
-    ctx.fillText(this.text, screenX, screenY);
+
+    // Convert <br> to \n to standardize line breaks
+    const lines = this.text.replace(/<br\s*\/?>/g, '\n').split('\n');
+
+    // Start drawing from the center line
+    // If multiple lines, we offset each line above and below centerY
+    // Let's assume one line is perfectly at (screenX, screenY).
+    const lineCount = lines.length;
+    const lineHeight = fontSize * 1.2; // adjust as needed
+    const totalHeight = lineHeight * lineCount;
+    // Top line position to center vertically
+    let yPos = screenY - (totalHeight / 2) + (lineHeight / 2);
+
+    for (const line of lines) {
+      ctx.fillText(line, screenX, yPos);
+      yPos += lineHeight;
+    }
   }
 }
+
 
 //========================
 // Star class (no scaling in size, just position)
