@@ -1,24 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <style>
   body, html {
-    margin: 0; 
-    padding: 0; 
-    background: black; 
+    margin: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0);
     overflow: hidden;
   }
   canvas {
-    display:block;
+    display: block;
   }
 </style>
-<title>Flying Math</title>
+<title>Fly-Through Universe</title>
 </head>
 <body>
 <canvas id="myCanvas"></canvas>
 <script>
+//========================
+// Configuration
+//========================
+const CONFIG = {
+  focalLength: 200,
+  numWords: 10,
+  numStars: 50,
+  startZ: -1000,
+  resetZ: -50,
+  fontBaseSize: 40,
+  maxXSpread: 500, // how far from center in X we can start
+  maxYSpread: 300, // how far from center in Y
+  minSpeed: 1,
+  maxSpeed: 5,
+  starSize: 2 // star radius in pixels
+};
+
+//========================
+// Canvas & Basics
+//========================
 const canvas = document.getElementById('myCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -29,86 +49,134 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// Parameters
-const focalLength = 200;
-const speed = 2;
-const maxDistance = -1000; 
-const startZ = -100;
-const NUM_WORDS = 10;
+function centerX() { return canvas.width / 2; }
+function centerY() { return canvas.height / 2; }
 
-const centerX = () => canvas.width / 2;
-const centerY = () => canvas.height / 2;
-
-// Generate a random math expression like "3+5", "10-2", "6*7"
+//========================
+// Utilities
+//========================
 function generateMathExpression() {
   const ops = ['+', '-', '*'];
-  const a = Math.floor(Math.random()*20)+1; // 1 to 20
-  const b = Math.floor(Math.random()*20)+1; // 1 to 20
+  const a = Math.floor(Math.random()*20)+1; 
+  const b = Math.floor(Math.random()*20)+1;
   const op = ops[Math.floor(Math.random()*ops.length)];
   return `${a}${op}${b}`;
 }
 
-// Initialize words as math expressions
-function createWordObject() {
-  return {
-    text: generateMathExpression(),
-    x: centerX() + (Math.random() - 0.5) * 300,
-    y: centerY() + (Math.random() - 0.5) * 200,
-    z: startZ,
-    delay: Math.floor(Math.random()*60),
-    active: false
-  };
+function randomRange(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
-const words = [];
-for (let i = 0; i < NUM_WORDS; i++) {
-  words.push(createWordObject());
+function randomOffset(range) {
+  return (Math.random() - 0.5) * range;
 }
 
-function resetWord(word) {
-  word.text = generateMathExpression();
-  word.x = centerX() + (Math.random() - 0.5) * 300;
-  word.y = centerY() + (Math.random() - 0.5) * 200;
-  word.z = startZ;
-  word.delay = Math.floor(Math.random()*60);
-  word.active = false; 
+// Project a 3D point onto 2D screen
+function project3D(x, y, z, focalLength) {
+  const scale = focalLength / Math.abs(z);
+  const screenX = centerX() + x * scale;
+  const screenY = centerY() + y * scale;
+  return { screenX, screenY, scale };
 }
 
+//========================
+// Base class for objects
+//========================
+class SpaceObject {
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    // Set random initial position far away
+    this.x = randomOffset(CONFIG.maxXSpread);
+    this.y = randomOffset(CONFIG.maxYSpread);
+    this.z = CONFIG.startZ;
+    this.speed = randomRange(CONFIG.minSpeed, CONFIG.maxSpeed);
+  }
+
+  update() {
+    // Move towards camera: increasing z
+    this.z += this.speed;
+
+    // If object gets too close, reset it
+    if (this.z > CONFIG.resetZ) {
+      this.reset();
+    }
+  }
+}
+
+//========================
+// Word class
+//========================
+class Word extends SpaceObject {
+  constructor() {
+    super();
+    this.text = generateMathExpression();
+  }
+
+  reset() {
+    super.reset();
+    this.text = generateMathExpression();
+  }
+
+  draw(ctx) {
+    const {screenX, screenY, scale} = project3D(this.x, this.y, this.z, CONFIG.focalLength);
+    const fontSize = CONFIG.fontBaseSize * scale;
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "white";
+    ctx.fillText(this.text, screenX, screenY);
+  }
+}
+
+//========================
+// Star class (no scaling in size, just position)
+//========================
+class Star extends SpaceObject {
+  constructor() {
+    super();
+  }
+
+  draw(ctx) {
+    const {screenX, screenY} = project3D(this.x, this.y, this.z, CONFIG.focalLength);
+    ctx.fillStyle = "white";
+    // Draw a small dot (fixed size)
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, CONFIG.starSize, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+//========================
+// Initialization
+//========================
+const words = Array.from({length: CONFIG.numWords}, () => new Word());
+const stars = Array.from({length: CONFIG.numStars}, () => new Star());
+
+//========================
+// Animation loop
+//========================
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "white";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
-  for (let word of words) {
-    // Handle delay before activation
-    if (!word.active) {
-      word.delay--;
-      if (word.delay <= 0) {
-        word.active = true;
-      } else {
-        continue;
-      }
-    }
+  // Update and draw stars
+  for (const star of stars) {
+    star.update();
+    star.draw(ctx);
+  }
 
-    const scale = focalLength / Math.abs(word.z);
-    const fontSize = 40 * scale;
-    ctx.font = `${fontSize}px sans-serif`;
-    ctx.fillText(word.text, word.x, word.y);
-
-    // Move word away
-    word.z -= speed;
-    word.x += (Math.random()-0.5)*0.3; 
-    word.y += (Math.random()-0.5)*0.3; 
-
-    if (word.z < maxDistance) {
-      resetWord(word);
-    }
+  // Update and draw words
+  for (const word of words) {
+    word.update();
+    word.draw(ctx);
   }
 
   requestAnimationFrame(animate);
 }
 
+// Start animation
 animate();
 </script>
 </body>
