@@ -232,40 +232,84 @@ class SpaceObject {
 class Word extends SpaceObject {
   constructor() {
     super();
-    this.text = generateMathExpression();
-    console.log("Generated word:", this.text);
+    this.prepareTextSprite();
   }
 
   reset() {
     super.reset();
+    this.prepareTextSprite();
+  }
+
+  prepareTextSprite() {
     this.text = generateMathExpression();
     console.log("Generated word:", this.text);
+    
+    // Process multi-line text: replace <br> with \n, then split
+    const lines = this.text.replace(/<br\s*\/?>/g, '\n').split('\n');
+
+    // Use a baseline font (no scaling here, just a standard size)
+    const fontSize = CONFIG.fontBaseSize;
+    const lineHeight = fontSize * 1.2;
+    const lineCount = lines.length;
+    const totalHeight = lineCount * lineHeight;
+
+    // Measure widest line to determine canvas width
+    const offscreen = document.createElement('canvas');
+    const offCtx = offscreen.getContext('2d');
+    offCtx.font = `${fontSize}px sans-serif`;
+
+    let maxWidth = 0;
+    for (const line of lines) {
+      const metrics = offCtx.measureText(line);
+      const width = metrics.width;
+      if (width > maxWidth) {
+        maxWidth = width;
+      }
+    }
+
+    // Add some padding
+    const padding = 10;
+    offscreen.width = Math.ceil(maxWidth + padding * 2);
+    offscreen.height = Math.ceil(totalHeight + padding * 2);
+
+    // Re-set font and styling after resizing canvas
+    offCtx.font = `${fontSize}px sans-serif`;
+    offCtx.textAlign = "center";
+    offCtx.textBaseline = "middle";
+    offCtx.fillStyle = "white";
+
+    // Draw lines centered in offscreen canvas
+    const centerX = offscreen.width / 2;
+    let yPos = (offscreen.height / 2) - (totalHeight / 2) + (lineHeight / 2);
+
+    for (const line of lines) {
+      offCtx.fillText(line, centerX, yPos);
+      yPos += lineHeight;
+    }
+
+    // Store the offscreen canvas as a sprite for later use
+    this.textSprite = offscreen;
+    this.spriteWidth = offscreen.width;
+    this.spriteHeight = offscreen.height;
   }
 
   draw(ctx) {
     const {screenX, screenY, scale} = project3D(this.x, this.y, this.z, CONFIG.focalLength);
-    const fontSize = CONFIG.fontBaseSize * scale;
-    ctx.font = `${fontSize}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "white";
 
-    // Convert <br> to \n to standardize line breaks
-    const lines = this.text.replace(/<br\s*\/?>/g, '\n').split('\n');
+    // We have a pre-rendered sprite at baseline size
+    // Original text drawn at fontSize = CONFIG.fontBaseSize
+    // Now we scale the sprite by 'scale' to simulate perspective
+    const drawWidth = this.spriteWidth * scale;
+    const drawHeight = this.spriteHeight * scale;
 
-    // Start drawing from the center line
-    // If multiple lines, we offset each line above and below centerY
-    // Let's assume one line is perfectly at (screenX, screenY).
-    const lineCount = lines.length;
-    const lineHeight = fontSize * 1.2; // adjust as needed
-    const totalHeight = lineHeight * lineCount;
-    // Top line position to center vertically
-    let yPos = screenY - (totalHeight / 2) + (lineHeight / 2);
-
-    for (const line of lines) {
-      ctx.fillText(line, screenX, yPos);
-      yPos += lineHeight;
-    }
+    // Draw centered at (screenX, screenY)
+    ctx.drawImage(
+      this.textSprite,
+      screenX - drawWidth / 2,
+      screenY - drawHeight / 2,
+      drawWidth,
+      drawHeight
+    );
   }
 }
 
