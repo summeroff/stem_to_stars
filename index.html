@@ -29,7 +29,7 @@ const CONFIG = {
   fontBaseSize: 40,
   spawnRadius: 2000, // For FLYING mode
 
-  // FLYING Mode
+  // FLYING Mode Parameters
   numWordsFlying: 10,
   numStarsFlying: 50,
   startZFlying: -1000,
@@ -38,12 +38,13 @@ const CONFIG = {
   maxSpeedFlying: 5,
   starSizeFlying: 2,
 
-  // FOLLOWING Mode
+  // FOLLOWING Mode Parameters
   numObjectsFollowing: 15,
   fadeDuration: 2000,    // milliseconds
   holdDuration: 2000,    // milliseconds
   zoomDuration: 1000,    // milliseconds
-  targetPoint: { x: 0, y: 0 }, // Will be set to center after resize
+  minInitialDelay: 0,    // milliseconds
+  maxInitialDelay: 2000, // milliseconds
 };
 
 //========================
@@ -55,8 +56,7 @@ const ctx = canvas.getContext('2d');
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  CONFIG.targetPoint.x = canvas.width / 2;
-  CONFIG.targetPoint.y = canvas.height / 2;
+  CONFIG.targetPoint = { x: canvas.width / 2, y: canvas.height / 2 };
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
@@ -73,7 +73,7 @@ function pickRandom(arr) {
 }
 
 function generateMathExpression() {
-  // Helper functions
+  // Helper constants
   const relOps = ['<', '>', '<=', '>=', '≈', '≠'];
   const arithOps = ['+', '-', '*'];
 
@@ -389,13 +389,14 @@ class SplashObject {
     // Random position on screen
     this.x = Math.random() * canvas.width;
     this.y = Math.random() * canvas.height;
-    // Start timers
-    this.startTime = performance.now();
+    // Start time with random initial delay
+    const initialDelay = randomRange(CONFIG.minInitialDelay, CONFIG.maxInitialDelay);
+    this.startTime = performance.now() + initialDelay;
     // Lifecycle durations
     this.fadeDuration = CONFIG.fadeDuration;
     this.holdDuration = CONFIG.holdDuration;
     this.zoomDuration = CONFIG.zoomDuration;
-    this.totalCycle = this.fadeDuration + this.holdDuration + this.zoomDuration;
+    this.totalCycle = this.fadeDuration + this.holdDuration + this.zoomDuration + initialDelay;
     // Pre-rendered sprite
     this.prepareTextSprite();
   }
@@ -453,24 +454,25 @@ class SplashObject {
     this.spriteHeight = offscreen.height;
   }
 
-  update() {
-    const now = performance.now();
-    this.elapsed = now - this.startTime;
-
+  update(currentTime) {
+    this.elapsed = currentTime - this.startTime;
     if (this.elapsed > this.totalCycle) {
       // Restart cycle
       this.reset();
     }
   }
 
-  draw(ctx) {
-    const now = performance.now();
-    const elapsed = now - this.startTime;
+  draw(ctx, currentTime) {
+    // Calculate elapsed time since cycle start
+    const elapsed = currentTime - this.startTime;
+
+    if (elapsed < 0) {
+      // Still in initial delay; do not render
+      return;
+    }
 
     let opacity = 0;
     let scale = 1;
-    let drawX = this.x;
-    let drawY = this.y;
 
     if (elapsed < this.fadeDuration) {
       // Fade in
@@ -480,16 +482,16 @@ class SplashObject {
       // Hold full opacity and size
       opacity = 1;
       scale = 1;
+    } else if (elapsed < this.totalCycle - this.zoomDuration) {
+      // Ensure no rendering between hold and zoom start
+      opacity = 1;
+      scale = 1;
     } else if (elapsed < this.totalCycle) {
-      // Zoom towards center
+      // Zoom out
       const zoomElapsed = elapsed - (this.fadeDuration + this.holdDuration);
       const t = zoomElapsed / this.zoomDuration; // 0 to 1
       opacity = 1;
       scale = 1 - t; // Scale down from 1 to 0
-
-      // Move towards center point
-      drawX = this.x + (CONFIG.targetPoint.x - this.x) * t;
-      drawY = this.y + (CONFIG.targetPoint.y - this.y) * t;
     }
 
     // Apply opacity
@@ -500,11 +502,11 @@ class SplashObject {
     const drawWidth = this.spriteWidth * scale;
     const drawHeight = this.spriteHeight * scale;
 
-    // Draw the sprite centered at (drawX, drawY)
+    // Draw the sprite centered at (this.x, this.y)
     ctx.drawImage(
       this.textSprite,
-      drawX - drawWidth / 2,
-      drawY - drawHeight / 2,
+      this.x - drawWidth / 2,
+      this.y - drawHeight / 2,
       drawWidth,
       drawHeight
     );
@@ -547,10 +549,17 @@ function animate() {
   // Clear the canvas; background is transparent
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  const currentTime = performance.now();
+
   // Update and draw each object
   for (const obj of objects) {
-    obj.update();
-    obj.draw(ctx);
+    if (MODE === 'FLYING') {
+      obj.update();
+      obj.draw(ctx);
+    } else if (MODE === 'FOLLOWING') {
+      obj.update(currentTime);
+      obj.draw(ctx, currentTime);
+    }
   }
 
   requestAnimationFrame(animate);
